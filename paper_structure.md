@@ -12,3 +12,10 @@
 8. Training details
 9. Additional samples
 10. Failure modes
+
+## Architecture
+
+\begin{eqaution}
+  \mathbf{x} = (x_1, \ldots, x_T)\\
+  \mathbb{m} = (m_1, \ldots, m_T), ~ m_j \in \{0, 1\}
+\end{equation}
