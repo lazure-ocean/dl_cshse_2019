@@ -13,9 +13,6 @@
 9. Additional samples
 10. Failure modes
 
-## Architecture
+## Architecture elements
 
-\begin{eqaution}
-  \mathbf{x} = (x_1, \ldots, x_T)\\
-  \mathbb{m} = (m_1, \ldots, m_T), ~ m_j \in \{0, 1\}
-\end{equation}
+[PyTorch Seq2seq tutorial](https://pytorch.org/tutorials/intermediate/seq2seq_translation_tutorial.html)
