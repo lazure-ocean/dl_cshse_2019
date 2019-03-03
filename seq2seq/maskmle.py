@@ -7,6 +7,8 @@ import random
 import math
 from time import time
 
+import matplotlib.pyplot as plt
+import matplotlib.ticker as ticker
 import numpy as np
 import torch
 import torch.nn as nn
@@ -286,11 +288,11 @@ def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_ev
             print('%s (%d %d%%) %.4f' % (timeSince(start, iter / n_iters),
                                          iter, iter / n_iters * 100, print_loss_avg))
 
-        """if iter % plot_every == 0:
+        if iter % plot_every == 0:
             plot_loss_avg = plot_loss_total / plot_every
             plot_losses.append(plot_loss_avg)
             plot_loss_total = 0
-            showPlot(plot_losses)"""
+    showPlot(plot_losses)
         
 
 def asMinutes(s):
@@ -306,6 +308,17 @@ def timeSince(since, percent):
     rs = es - s
     return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
+def showPlot(points):
+    print(points)
+    plt.figure()
+    fig, ax = plt.subplots()
+    # this locator puts ticks at regular intervals
+    loc = ticker.MultipleLocator(base=0.2)
+    ax.yaxis.set_major_locator(loc)
+    plt.plot(points)
+    plt.show()
+    print('plot must be showing')
+
 #OPERATING
 
 imdb_lang, imdb_lines = prepareData('imdb')
@@ -314,4 +327,4 @@ encoder1 = EncoderRNN(imdb_lang.n_words, hidden_size).to(device)
 #attn_decoder1 = AttnDecoderRNN(hidden_size, output_lang.n_words, dropout_p=0.1).to(device)
 decoder1 = DecoderRNN(hidden_size, imdb_lang.n_words)
 print("Total number of trainable parameters:", count_parameters(encoder1) + count_parameters(decoder1))
-trainIters(encoder1, decoder1, imdb_lang, imdb_lines, 100, print_every=10)
+trainIters(encoder1, decoder1, imdb_lang, imdb_lines, 5, print_every=1)
