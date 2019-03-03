@@ -201,7 +201,7 @@ def indexFromTensor(lang, decoder_output):
 MAX_LENGTH = 42 # max(map(lambda x: len(x.split()), imdb_lines)) == 2516
 
 def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, lang, criterion, max_length=MAX_LENGTH):
-    #c_ = time()
+    
     encoder_hidden = encoder.initHidden()
 
     encoder_optimizer.zero_grad()
@@ -211,44 +211,34 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
 
     loss = 0
     
-    #print('Starting encoder...', time() - c_)
-    #c_ = time()
-    
     for ei in range(input_length):
-        encoder_output, encoder_hidden = encoder(
+        _, encoder_hidden = encoder(
             input_tensor[ei], encoder_hidden)
-        #encoder_outputs[ei] = encoder_output[0, 0]
-
-    
-    #print('Finished encoder...', time() - c_)
-    #c_ = time()
         
     decoder_input = input_tensor[0]
     decoder_hidden = encoder_hidden
-    #print('Starting decoder...', time() - c_)
-    #c_ = time()
+
     for di in range(input_length):        
             
         decoder_output, decoder_hidden = decoder(
             decoder_input, decoder_hidden)      
         loss += criterion(decoder_output, target_tensor[di])
-        #print(decoder_input.item(), input_tensor[di + 1].item(), input_tensor[di].item())
+
         if input_tensor[di + 1].item() == MASKED_token:
-            topv, topi = decoder_output.topk(1)
-            decoder_input = topi.squeeze().detach()  # detach from history as input
+            token_sample = torch.multinomial(torch.exp(decoder_output), 1)
+            decoder_input = token_sample.squeeze().detach()
         else:
             decoder_input = input_tensor[di + 1]
 
         if input_tensor[di + 1].item() == EOS_token:
             break
     
-    #print('Finished decoder...', time() - c_)
     c_ = time()
     
     loss.backward()
 
     print('Done backward...', time() - c_)
-    #c_ = time()
+
     
     encoder_optimizer.step()
     decoder_optimizer.step()
@@ -269,16 +259,13 @@ def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_ev
     criterion = nn.NLLLoss()
     
     for iter in range(1, n_iters + 1):
-        #c_ = time()
         training_pair = training_pairs[iter - 1]
         input_tensor = training_pair[0]
         target_tensor = training_pair[1]
-        #print('Pairs created ...', time() - c_)
-        #c_ = time()
+
         loss = train(input_tensor, target_tensor, encoder,
                      decoder, encoder_optimizer, decoder_optimizer, lang, criterion)
-        #print('Loss is done...', time() - c_)
-        #c_ = time()
+
         print_loss_total += loss
         plot_loss_total += loss
 
@@ -324,7 +311,6 @@ def showPlot(points):
 imdb_lang, imdb_lines = prepareData('imdb')
 hidden_size = 256
 encoder1 = EncoderRNN(imdb_lang.n_words, hidden_size).to(device)
-#attn_decoder1 = AttnDecoderRNN(hidden_size, output_lang.n_words, dropout_p=0.1).to(device)
 decoder1 = DecoderRNN(hidden_size, imdb_lang.n_words)
 print("Total number of trainable parameters:", count_parameters(encoder1) + count_parameters(decoder1))
-trainIters(encoder1, decoder1, imdb_lang, imdb_lines, 5, print_every=1)
+trainIters(encoder1, decoder1, imdb_lang, imdb_lines, 500, print_every=50, plot_every=5)
