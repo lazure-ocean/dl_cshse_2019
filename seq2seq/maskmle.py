@@ -20,7 +20,7 @@ from torchnlp.datasets import penn_treebank_dataset
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-#GETTING DATA
+# GETTING DATA
 
 SOS_token = 0
 EOS_token = 1
@@ -95,7 +95,7 @@ def prepareData(dataset_title):
     print(lang.name, lang.n_words)
     return lang, lines
 
-#MODEL
+# MODEL
 
 class EncoderRNN(nn.Module):
     def __init__(self, input_size, hidden_size):
@@ -103,16 +103,19 @@ class EncoderRNN(nn.Module):
         self.hidden_size = hidden_size
 
         self.embedding = nn.Embedding(input_size, hidden_size)
-        self.gru = nn.GRU(hidden_size, hidden_size)
+        #self.gru = nn.GRU(hidden_size, hidden_size)
+        self.lstm = nn.LSTM(hidden_size, hidden_size)
 
     def forward(self, input, hidden):
         embedded = self.embedding(input).view(1, 1, -1)
         output = embedded
-        output, hidden = self.gru(output, hidden)
+        #output, hidden = self.gru(output, hidden)
+        output, hidden = self.lstm(output, hidden)
         return output, hidden
 
     def initHidden(self):
-        return torch.zeros(1, 1, self.hidden_size, device=device)
+        return (torch.zeros(1, 1, self.hidden_size, device=device),
+                torch.zeros(1, 1, self.hidden_size, device=device))
     
 class DecoderRNN(nn.Module):
     def __init__(self, hidden_size, output_size):
@@ -120,26 +123,29 @@ class DecoderRNN(nn.Module):
         self.hidden_size = hidden_size
 
         self.embedding = nn.Embedding(output_size, hidden_size)
-        self.gru = nn.GRU(hidden_size, hidden_size)
+        #self.gru = nn.GRU(hidden_size, hidden_size)
+        self.lstm = nn.LSTM(hidden_size, hidden_size)
         self.out = nn.Linear(hidden_size, output_size)
         self.softmax = nn.LogSoftmax(dim=1)
 
     def forward(self, input, hidden):
         output = self.embedding(input).view(1, 1, -1)
         output = F.relu(output)
-        output, hidden = self.gru(output, hidden)
+        #output, hidden = self.gru(output, hidden)
+        output, hidden = self.lstm(output, hidden)
         output = self.softmax(self.out(output[0]))
         return output, hidden
 
     def initHidden(self):
-        return torch.zeros(1, 1, self.hidden_size, device=device)
+        return (torch.zeros(1, 1, self.hidden_size, device=device),
+                torch.zeros(1, 1, self.hidden_size, device=device))
     
 def count_parameters(model):
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     return sum([np.prod(p.size()) for p in model_parameters])
 
     
-#PREPARING TRAINING DATA
+# PREPARING TRAINING DATA
     
 def generate_mask(sequence_length, batch_size=None, is_present=0.7):
     """
@@ -196,7 +202,7 @@ def tensorsForTrain(lang, sentence):
 def indexFromTensor(lang, decoder_output):
     return decoder_output.max(0)[1]
 
-#TRAINING MODEL
+# TRAINING MODEL
 
 MAX_LENGTH = 42 # max(map(lambda x: len(x.split()), imdb_lines)) == 2516
 
@@ -222,7 +228,7 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
             
         decoder_output, decoder_hidden = decoder(
             decoder_input, decoder_hidden)      
-        loss += criterion(decoder_output, target_tensor[di])
+        loss += criterion(decoder_output, target_tensor[di + 1])
 
         if input_tensor[di + 1].item() == MASKED_token:
             token_sample = torch.multinomial(torch.exp(decoder_output), 1)
@@ -233,11 +239,11 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
         if input_tensor[di + 1].item() == EOS_token:
             break
     
-    c_ = time()
+    #c_ = time()
     
     loss.backward()
 
-    print('Done backward...', time() - c_)
+    #print('Done backward...', time() - c_)
 
     
     encoder_optimizer.step()
@@ -306,11 +312,57 @@ def showPlot(points):
     plt.show()
     print('plot must be showing')
 
-#OPERATING
+# EVALUATING
+def evaluate(encoder, decoder, input_lang, input_tensor, max_length=MAX_LENGTH):
+    with torch.no_grad():
+        input_length = input_tensor.size()[0]
+        encoder_hidden = encoder.initHidden()
+
+        encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
+
+        for ei in range(input_length):
+            encoder_output, encoder_hidden = encoder(input_tensor[ei],
+                                                     encoder_hidden)
+            encoder_outputs[ei] += encoder_output[0, 0]
+
+        decoder_input = input_tensor[0]
+        decoder_hidden = encoder_hidden
+        decoded_words = ['SOSTOKEN']
+
+        for di in range(max_length):        
+            
+            decoder_output, decoder_hidden = decoder(
+                decoder_input, decoder_hidden)      
+
+            if input_tensor[di + 1].item() == MASKED_token:
+                token_sample = torch.multinomial(torch.exp(decoder_output), 1)
+                decoder_input = token_sample.squeeze().detach()
+                decoded_words.append(input_lang.index2word[decoder_input.item()].upper())
+            else:
+                decoder_input = input_tensor[di + 1]
+                decoded_words.append(input_lang.index2word[decoder_input.item()])
+            
+            if input_tensor[di + 1].item() == EOS_token:
+                decoded_words.append('EOSTOKEN')
+                break
+                
+        return decoded_words
+    
+def evaluateRandomly(encoder, decoder, input_lang, n=10):
+    for i in range(n):
+        
+        sentence = random.choice(imdb_lines)
+        pair = tensorsForTrain(input_lang, sentence)
+        print('real:\n', sentence)
+        mask = generate_mask(len(sentence.split()), is_present=0.8)
+        print('filled:\n', *evaluate(encoder, decoder, input_lang, pair[1])
+    
+# OPERATING
 
 imdb_lang, imdb_lines = prepareData('imdb')
 hidden_size = 256
 encoder1 = EncoderRNN(imdb_lang.n_words, hidden_size).to(device)
 decoder1 = DecoderRNN(hidden_size, imdb_lang.n_words)
 print("Total number of trainable parameters:", count_parameters(encoder1) + count_parameters(decoder1))
-trainIters(encoder1, decoder1, imdb_lang, imdb_lines, 500, print_every=50, plot_every=5)
+trainIters(encoder1, decoder1, imdb_lang, imdb_lines, 1000, print_every=50, plot_every=5)
+evaluateRandomly(encoder1, decoder1, imdb_lang, 5)
