@@ -355,7 +355,7 @@ def evaluateRandomly(encoder, decoder, input_lang, n=10):
         pair = tensorsForTrain(input_lang, sentence)
         print('real:\n', sentence)
         mask = generate_mask(len(sentence.split()), is_present=0.8)
-        print('filled:\n', *evaluate(encoder, decoder, input_lang, pair[1])
+        print('filled:\n', *evaluate(encoder, decoder, input_lang, pair[1]))
     
 # OPERATING
 
