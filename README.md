@@ -5,5 +5,7 @@ PyTorch implementation of a research paper [MaskGAN: Better Text Generation via 
 
 * MaskMLE: dl_cshse_2019/seq2seq/maskmle.py
 
-* Model architecture
-  * generator: 
+* Algorithm:
+1. Pretrain rnn cells (lstm) on language modelling task. 
+2. Use the weights in generator and discrimantor encoders and decoders
+3. 
