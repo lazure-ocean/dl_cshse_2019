@@ -1,0 +1,7 @@
+# data for train
+data/
+__pycache__/
+.ipynb_checkpoints/
+base.ipynb
+first.ipynb
+test.ipynb
