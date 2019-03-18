@@ -188,8 +188,8 @@ def trainIters(model, lang, lines, n_iters, print_every=1000, plot_every=100, te
     plot_loss_val = 0  # Reset every plot_every
 
     model_optimizer = optim.SGD(model.parameters(), lr=learning_rate)
-    training_sentences = [tensorFromSentence(lang, lines[0]) for i in range(n_iters)]
-    test_sentences = [tensorFromSentence(lang, lines[0]) for i in range(n_iters // test_every)]
+    training_sentences = [tensorFromSentence(lang, lines[i]) for i in range(n_iters)]
+    test_sentences = [tensorFromSentence(lang, lines[n_iters + i]) for i in range(n_iters // test_every)]
     
     criterion = nn.CrossEntropyLoss() 
     
