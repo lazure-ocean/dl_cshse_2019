@@ -8,4 +8,7 @@ PyTorch implementation of a research paper [MaskGAN: Better Text Generation via 
 * Algorithm:
 1. Pretrain rnn cells (lstm) on language modelling task. 
 2. Use the weights in generator and discrimantor encoders and decoders
-3. 
+3. Pretrain generator and discriminator in MaskMLE mode
+4. Train generator and discriminator in GAN actor-crititc mode with following loop:
+    * Fix discriminator parameters, train generator in actor-critic mode
+    * Fix generator parameters, sample real and fake sentences, train discriminator
