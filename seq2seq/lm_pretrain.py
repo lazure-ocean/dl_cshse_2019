@@ -135,26 +135,7 @@ class pretrainLSTM(nn.Module):
 MAX_LENGTH = 42 # max(map(lambda x: len(x.split()), imdb_lines)) == 2516
 
 def train(input_tensor, model, model_optimizer, criterion, max_length=MAX_LENGTH):
-    #c_ = time()class pretrainLSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers=1):
-        super().__init__()
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-
-        self.embedding = nn.Embedding(input_size, hidden_size)
-        self.lstm = nn.LSTM(hidden_size, hidden_size, num_layers=num_layers)
-        self.fc = nn.Linear(hidden_size, input_size)
-        
-    def forward(self, input, hidden):
-        embedded = self.embedding(input).view(1, 1, -1)
-        output = embedded
-        output, hidden = self.lstm(output, hidden)
-        output = self.fc(output)
-        return output, hidden
-
-    def initHidden(self):
-        return (torch.zeros(1, 1, self.hidden_size, device=device),
-                torch.zeros(1, 1, self.hidden_size, device=device))
+    #c_ = time()
     model_hidden = model.initHidden()
 
     model_optimizer.zero_grad()
@@ -179,15 +160,36 @@ def train(input_tensor, model, model_optimizer, criterion, max_length=MAX_LENGTH
 
     return loss.item() / input_length
 
-def trainIters(model, lang, lines, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):
+def test(input_tensor, model, criterion, max_length=MAX_LENGTH):
+    model_hidden = model.initHidden()
+
+    input_length = input_tensor.size(0)
+    
+    model_outputs = torch.zeros(max_length, model.input_size, device=device)
+
+    loss = 0
+
+    for ei in range(input_length - 1):
+        model_output, model_hidden = model(
+            input_tensor[ei], model_hidden)
+        
+        loss += criterion(model_output[0], input_tensor[ei + 1])
+        model_outputs[ei] = model_output[0]
+
+    return loss.item() / input_length
+
+def trainIters(model, lang, lines, n_iters, print_every=1000, plot_every=100, test_every=1, learning_rate=0.01):
     #start = time.time()
     start = time()
     plot_losses = []
     print_loss_total = 0  # Reset every print_every
     plot_loss_total = 0  # Reset every plot_every
+    print_loss_val = 0  # Reset every print_every
+    plot_loss_val = 0  # Reset every plot_every
 
     model_optimizer = optim.SGD(model.parameters(), lr=learning_rate)
     training_sentences = [tensorFromSentence(lang, lines[0]) for i in range(n_iters)]
+    test_sentences = [tensorFromSentence(lang, lines[0]) for i in range(n_iters // test_every)]
     
     criterion = nn.CrossEntropyLoss() 
     
@@ -202,12 +204,24 @@ def trainIters(model, lang, lines, n_iters, print_every=1000, plot_every=100, le
         #c_ = time()
         print_loss_total += loss
         plot_loss_total += loss
+        
+        test_count = 0
+        if iter_ % test_every == 0:
+            test_tensor = test_sentences[iter_ // test_every - 1]
+            loss = test(input_tensor, model, criterion)
+            print_loss_val += loss
+            plot_loss_val += loss
+            test_count += 1
 
+        
         if iter_ % print_every == 0:
+            print_loss_avg_val = print_loss_val / test_count
+            test_count = 0
+            print_loss_val = 0
             print_loss_avg = print_loss_total / print_every
             print_loss_total = 0
-            print('%s (%d %d%%) %.4f' % (timeSince(start, iter_ / n_iters),
-                                         iter_, iter_ / n_iters * 100, print_loss_avg))
+            print('%s (%d %d%%) train: %.4f, val: %.4f' % (timeSince(start, iter_ / n_iters),
+                                         iter_, iter_ / n_iters * 100, print_loss_avg, print_loss_avg_val))
 
         if iter_ % plot_every == 0:
             plot_loss_avg = plot_loss_total / plot_every
