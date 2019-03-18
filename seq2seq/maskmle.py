@@ -3,7 +3,9 @@ from io import open
 import unicodedata
 import string
 import re
+import os
 import random
+import pickle as pkl
 import math
 from time import time
 
@@ -18,6 +20,8 @@ import torch.nn.functional as F
 from torchnlp.datasets import imdb_dataset
 from torchnlp.datasets import penn_treebank_dataset
 
+from lm_pretrain import pretrainLSTM
+
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # GETTING DATA
@@ -25,7 +29,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 SOS_token = 0
 EOS_token = 1
 MASKED_token = 2
-
+MAX_LENGTH = 42
 
 class Lang:
     def __init__(self, name):
@@ -238,8 +242,6 @@ def indexFromTensor(lang, decoder_output):
 
 # TRAINING MODEL
 
-MAX_LENGTH = 42 
-
 def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, lang, criterion, max_length=MAX_LENGTH):
     encoder_hidden = encoder.initHidden()
 
@@ -440,9 +442,16 @@ def evaluateRandomly(encoder, decoder, input_lang, n=10):
 
 if __name__ == "__main__":
     
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    SOS_token = 0
+    EOS_token = 1
+    MASKED_token = 2
+    MAX_LENGTH = 42
+    
+    
     hidden_size = 325
-    train_iters = 2000
-    pretrain_train_iters = 1000
+    train_iters = 100
+    pretrain_train_iters = 2000
     dataset = 'imdb'
     lang_filename = './data/' + dataset + '_lang.pkl'
     
@@ -463,7 +472,7 @@ if __name__ == "__main__":
         with open(pretrained_filename, 'rb') as file:
             pretainedlstm = pkl.load(file)
     else:
-        raise NotImplementedError 'pretrained lstm is not available'
+        raise NotImplementedError ('pretrained lstm is not available')
             
             
     encoder1 = EncoderRNN(lang.n_words, hidden_size).to(device)
@@ -477,14 +486,3 @@ if __name__ == "__main__":
     trainIters(encoder1, attn_decoder1, lang, lines, 1000, print_every=50, plot_every=5)
     
     evaluateRandomly(encoder1, decoder1, imdb_lang, 5)
-    
-    
-    print('using hidden_size=' + str(hidden_size))
-    trainIters(lstm, lang, 
-               lines, 
-               train_iters, 
-               print_every=train_iters//20 + 1, 
-               plot_every=train_iters//50 + 1)
-    with open(model_filename, 'wb') as file:
-        pkl.dump(lstm, file)
-
