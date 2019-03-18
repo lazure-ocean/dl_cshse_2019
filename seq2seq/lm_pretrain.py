@@ -4,7 +4,10 @@ from time import time
 import unicodedata
 import string
 import re
+import os
 import random
+import math
+import pickle as pkl
 
 import numpy as np
 import torch
@@ -14,7 +17,6 @@ import torch.nn.functional as F
 
 from torchnlp.datasets import imdb_dataset
 from torchnlp.datasets import penn_treebank_dataset
-%matplotlib inline
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -191,7 +193,7 @@ def trainIters(model, lang, lines, n_iters, print_every=1000, plot_every=100, le
     
     for iter_ in range(1, n_iters + 1):
         #c_ = time()
-        input_tensor = training_sentences[iter - 1]
+        input_tensor = training_sentences[iter_ - 1]
         #print('Pairs created ...', time() - c_)
         #c_ = time()
         loss = train(input_tensor, model,
@@ -204,8 +206,8 @@ def trainIters(model, lang, lines, n_iters, print_every=1000, plot_every=100, le
         if iter_ % print_every == 0:
             print_loss_avg = print_loss_total / print_every
             print_loss_total = 0
-            print('%s (%d %d%%) %.4f' % (timeSince(start, iter / n_iters),
-                                         iter, iter / n_iters * 100, print_loss_avg))
+            print('%s (%d %d%%) %.4f' % (timeSince(start, iter_ / n_iters),
+                                         iter_, iter_ / n_iters * 100, print_loss_avg))
 
         if iter_ % plot_every == 0:
             plot_loss_avg = plot_loss_total / plot_every
@@ -215,6 +217,8 @@ def trainIters(model, lang, lines, n_iters, print_every=1000, plot_every=100, le
     
     #showPlot(plot_losses)
     return plot_losses
+
+#def generate()
 
 def asMinutes(s):
     m = math.floor(s / 60)
@@ -230,11 +234,30 @@ def timeSince(since, percent):
     return '%s (- %s)' % (asMinutes(s), asMinutes(rs))
 
 if __name__ == "__main__":
-    imdb_lang, imdb_lines = prepareData('imdb')
+    
+    hidden_size = 64
+    train_iters = 10
+    dataset = 'imdb'
+    lang_filename = './data/' + dataset + '_lang.pkl'
+    if os.path.exists(lang_filename):
+        with open(lang_filename, 'rb') as file:
+            (lang, lines) = pkl.load(file)
+    else:
+        lang, lines = prepareData(dataset)
+        with open(lang_filename, 'wb') as file:
+            pkl.dump((lang, lines), file)
+    
     #print(random.choice(imdb_lines))
-
-    hidden_size = 312
-    lstm = pretrainLSTM(imdb_lang.n_words, hidden_size).to(device)
-
-    trainIters(lstm, imdb_lang, imdb_lines, 100, print_every=10, plot_every=1)
+    
+    
+    model_filename = './pretrained/pretrained_lstm_' + dataset + '_' + str(hidden_size) + '_' + str(train_iters) + '.pkl'
+    lstm = pretrainLSTM(lang.n_words, hidden_size).to(device)
+    print('using hidden_size=' + str(hidden_size))
+    trainIters(lstm, lang, 
+               lines, 
+               train_iters, 
+               print_every=train_iters//20 + 1, 
+               plot_every=train_iters//50 + 1)
+    with open(model_filename, 'wb') as file:
+        pkl.dump(lstm, file)
     
