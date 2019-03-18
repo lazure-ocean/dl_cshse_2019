@@ -192,20 +192,17 @@ def trainIters(model, lang, lines, n_iters, print_every=1000, plot_every=100, te
     test_sentences = [tensorFromSentence(lang, lines[n_iters + i]) for i in range(n_iters // test_every)]
     
     criterion = nn.CrossEntropyLoss() 
-    
+    test_count = 0
     for iter_ in range(1, n_iters + 1):
         #c_ = time()
         input_tensor = training_sentences[iter_ - 1]
-        #print('Pairs created ...', time() - c_)
-        #c_ = time()
+
         loss = train(input_tensor, model,
                      model_optimizer, criterion)
-        #print('Loss is done...', time() - c_)
-        #c_ = time()
         print_loss_total += loss
         plot_loss_total += loss
         
-        test_count = 0
+        
         if iter_ % test_every == 0:
             test_tensor = test_sentences[iter_ // test_every - 1]
             loss = test(input_tensor, model, criterion)
@@ -270,8 +267,8 @@ if __name__ == "__main__":
     trainIters(lstm, lang, 
                lines, 
                train_iters, 
-               print_every=train_iters//20 + 1, 
-               plot_every=train_iters//50 + 1)
+               print_every=train_iters // 20 + 1, 
+               plot_every=train_iters // 50 + 1)
     with open(model_filename, 'wb') as file:
         pkl.dump(lstm, file)
     
