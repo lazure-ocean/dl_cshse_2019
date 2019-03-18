@@ -241,7 +241,6 @@ def indexFromTensor(lang, decoder_output):
 MAX_LENGTH = 42 
 
 def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, lang, criterion, max_length=MAX_LENGTH):
-    #c_ = time()
     encoder_hidden = encoder.initHidden()
 
     encoder_optimizer.zero_grad()
@@ -263,15 +262,11 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
     decoder_hidden = encoder_hidden
 
     for di in range(input_length):        
-        #print(encoder_outputs.shape)
         decoder_output, decoder_hidden, decoder_attention  = decoder(
             decoder_input, decoder_hidden, encoder_outputs)      
         loss += criterion(decoder_output, target_tensor[di + 1])
 
         if input_tensor[di + 1].item() == MASKED_token:
-            #topv, topi = decoder_output.topk(1)
-            #decoder_input = topi.squeeze().detach()  # detach from history as input
-            #print(decoder_output.min())
             token_sample = torch.multinomial(torch.exp(decoder_output), 1)
             decoder_input = token_sample.squeeze().detach()
         else:
@@ -289,35 +284,81 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
 
     return loss.item() / input_length
 
+def test(input_tensor, target_tensor, encoder, decoder, lang, criterion, max_length=MAX_LENGTH):
+    encoder_hidden = encoder.initHidden()
+
+    input_length = input_tensor.size(0)
+    
+    encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
+
+    loss = 0
+
+    for ei in range(input_length):
+        encoder_output, encoder_hidden = encoder(
+            input_tensor[ei], encoder_hidden)
+        encoder_outputs[ei] = encoder_output[0, 0]
+
+        
+    decoder_input = input_tensor[0]
+    decoder_hidden = encoder_hidden
+
+    for di in range(input_length):        
+        decoder_output, decoder_hidden, decoder_attention  = decoder(
+            decoder_input, decoder_hidden, encoder_outputs)      
+        loss += criterion(decoder_output, target_tensor[di + 1])
+
+        if input_tensor[di + 1].item() == MASKED_token:
+            token_sample = torch.multinomial(torch.exp(decoder_output), 1)
+            decoder_input = token_sample.squeeze().detach()
+        else:
+            decoder_input = input_tensor[di + 1]
+
+        if input_tensor[di + 1].item() == EOS_token:
+            break
+    return loss.item() / input_length
+
 def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):
     #start = time.time()
     start = time()
     plot_losses = []
     print_loss_total = 0  # Reset every print_every
     plot_loss_total = 0  # Reset every plot_every
+    print_loss_val = 0  # Reset every print_every
+    plot_loss_val = 0
 
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
-    training_pairs = [tensorsForTrain(lang, random.choice(lines)) for i in range(n_iters)]
+    training_pairs = [tensorsForTrain(lang, random.choice(lines)) for i in range(2 * n_iters + 2)]
     
     criterion = nn.NLLLoss()
     
     for iter in range(1, n_iters + 1):
-        training_pair = training_pairs[iter - 1]
+        training_pair = training_pairs[2 * iter - 2]
         input_tensor = training_pair[0]
         target_tensor = training_pair[1]
 
         loss = train(input_tensor, target_tensor, encoder,
                      decoder, encoder_optimizer, decoder_optimizer, lang, criterion)
-
+        
         print_loss_total += loss
         plot_loss_total += loss
+        
+        training_pair = training_pairs[2 * iter - 1]
+        input_tensor = training_pair[0]
+        target_tensor = training_pair[1]
+        
+        loss = test(input_tensor, target_tensor, encoder,
+                     decoder, lang, criterion)
+        print_loss_val += loss
+        plot_loss_val += loss
 
         if iter % print_every == 0:
+            print_loss_avg_val = print_loss_val / print_every
+            print_loss_val = 0
             print_loss_avg = print_loss_total / print_every
             print_loss_total = 0
-            print('%s (%d %d%%) %.4f' % (timeSince(start, iter / n_iters),
-                                         iter, iter / n_iters * 100, print_loss_avg))
+            print('%s (%d %d%%) train: %.4f val: %.4f' % (timeSince(start, iter / n_iters),
+                                         iter, iter / n_iters * 100, print_loss_avg, print_loss_avg_val))
 
         if iter % plot_every == 0:
             plot_loss_avg = plot_loss_total / plot_every
@@ -399,8 +440,8 @@ def evaluateRandomly(encoder, decoder, input_lang, n=10):
 
 if __name__ == "__main__":
     
-    hidden_size = 64
-    train_iters = 10
+    hidden_size = 325
+    train_iters = 2000
     pretrain_train_iters = 1000
     dataset = 'imdb'
     lang_filename = './data/' + dataset + '_lang.pkl'
@@ -419,7 +460,24 @@ if __name__ == "__main__":
     model_filename = './pretrained/maskmle_' + dataset + '_' + str(hidden_size) + '_' + str(train_iters) + '.pkl'
     
     if os.path.exists(pretrained_filename):
-        pretainedlstm = pretrainLSTM(lang.n_words, hidden_size).to(device)
+        with open(pretrained_filename, 'rb') as file:
+            pretainedlstm = pkl.load(file)
+    else:
+        raise NotImplementedError 'pretrained lstm is not available'
+            
+            
+    encoder1 = EncoderRNN(lang.n_words, hidden_size).to(device)
+    attn_decoder1 = AttnDecoderRNN(hidden_size, lang.n_words, dropout_p=0.1).to(device)
+    print("Total number of trainable parameters:", count_parameters(encoder1) + count_parameters(attn_decoder1))
+    
+    
+    encoder1.embedding.weight, encoder1.lstm.weights = pretainedlstm.embedding.weight, pretrained.lstm.weights
+    attn_decoder1.embedding.weight, attn_decoder1.lstm.weights = pretainedlstm.embedding.weight, pretrained.lstm.weights
+    
+    trainIters(encoder1, attn_decoder1, lang, lines, 1000, print_every=50, plot_every=5)
+    
+    evaluateRandomly(encoder1, decoder1, imdb_lang, 5)
+    
     
     print('using hidden_size=' + str(hidden_size))
     trainIters(lstm, lang, 
@@ -430,8 +488,3 @@ if __name__ == "__main__":
     with open(model_filename, 'wb') as file:
         pkl.dump(lstm, file)
 
-encoder1 = EncoderRNN(imdb_lang.n_words, hidden_size).to(device)
-decoder1 = DecoderRNN(hidden_size, imdb_lang.n_words)
-print("Total number of trainable parameters:", count_parameters(encoder1) + count_parameters(decoder1))
-trainIters(encoder1, decoder1, imdb_lang, imdb_lines, 1000, print_every=50, plot_every=5)
-evaluateRandomly(encoder1, decoder1, imdb_lang, 5)
