@@ -18,7 +18,10 @@ import torch.nn.functional as F
 from torchnlp.datasets import imdb_dataset
 from torchnlp.datasets import penn_treebank_dataset
 
-from data_preparation import prepareData, Lang
+from gensim.models import Word2Vec
+from data_preparation import cachePrepareData, Lang
+from models import EncoderRNN, AttnDecoderRNN, pretrainLSTM
+from word2vec_embeddings import get_embeddings
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -160,31 +163,32 @@ def timeSince(since, percent):
 
 if __name__ == "__main__":
     
-    hidden_size = 64
+    hidden_size = 325
     train_iters = 10
     dataset = 'imdb'
-    lang_filename = './data/' + dataset + '_lang.pkl'
+    lang, lines = cachePrepareData(dataset)
+    
     model_filename = ''.join(['./pretrained/pretrained_lstm_', 
                               dataset, '_', 
                               str(hidden_size), '_', 
                               str(train_iters), '.pkl'])
-    
-    if os.path.exists(lang_filename):
-        with open(lang_filename, 'rb') as file:
-            (lang, lines) = pkl.load(file)
-    else:
-        lang, lines = prepareData(dataset)
-        with open(lang_filename, 'wb') as file:
-            pkl.dump((lang, lines), file)
 
 
+    # w2v_model = Word2Vec.load(''.join(["word2vec_", str(hidden_size), ".model"]))
+    w2v_vectors = get_embeddings(lang, lines, hidden_size)
+    w2v_vectors = torch.from_numpy(w2v_vectors).float()
     lstm = pretrainLSTM(lang.n_words, hidden_size).to(device)
+    print('lstm initialized')
+    lstm.embedding = nn.Embedding(lstm.embedding.num_embeddings, 
+                                  lstm.embedding.embedding_dim).from_pretrained(w2v_vectors)
+    
     print('using hidden_size=' + str(hidden_size), ' train_iters = ', train_iters)
     trainIters(lstm, lang, 
                lines, 
                train_iters, 
                print_every=train_iters // 20 + 1, 
                plot_every=train_iters // 50 + 1)
+    
     with open(model_filename, 'wb') as file:
         pkl.dump(lstm, file)
     
