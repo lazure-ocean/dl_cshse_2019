@@ -480,8 +480,8 @@ if __name__ == "__main__":
     print("Total number of trainable parameters:", count_parameters(encoder1) + count_parameters(attn_decoder1))
     
     
-    encoder1.embedding.weight, encoder1.lstm.weights = pretainedlstm.embedding.weight, pretrained.lstm.weights
-    attn_decoder1.embedding.weight, attn_decoder1.lstm.weights = pretainedlstm.embedding.weight, pretrained.lstm.weights
+    encoder1.embedding.weight, encoder1.lstm.weights = pretainedlstm.embedding.weight, pretainedlstm.lstm.weights
+    attn_decoder1.embedding.weight, attn_decoder1.lstm.weights = pretainedlstm.embedding.weight, pretainedlstm.lstm.weights
     
     trainIters(encoder1, attn_decoder1, lang, lines, 1000, print_every=50, plot_every=5)
     
