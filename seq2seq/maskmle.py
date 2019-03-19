@@ -479,10 +479,25 @@ if __name__ == "__main__":
     attn_decoder1 = AttnDecoderRNN(hidden_size, lang.n_words, dropout_p=0.1).to(device)
     print("Total number of trainable parameters:", count_parameters(encoder1) + count_parameters(attn_decoder1))
     
+    def copy_lstm_weights(from_, *args):
+        for to_ in args:
+            to_.weight_ih_l = from_.weight_ih_l
+            to_.weight_hh_l = from_.weight_hh_l
+            to_.bias_ih_l = from_.bias_ih_l
+            to_.bias_hh_l = from_.bias_hh_l
     
-    encoder1.embedding.weight, encoder1.lstm.weights = pretainedlstm.embedding.weight, pretainedlstm.lstm.weights
-    attn_decoder1.embedding.weight, attn_decoder1.lstm.weights = pretainedlstm.embedding.weight, pretainedlstm.lstm.weights
+    copy_lstm_weights(pretainedlstm.lstm, encoder1.lstm, attn_decoder1.lstm)
+    #copy_lstm_weights(pretainedlstm.lstm, attn_decoder1.lstm)
     
-    trainIters(encoder1, attn_decoder1, lang, lines, 1000, print_every=50, plot_every=5)
+    encoder1.embedding.weight = pretainedlstm.embedding.weight
+    attn_decoder1.embedding.weight = pretainedlstm.embedding.weight
     
-    evaluateRandomly(encoder1, decoder1, imdb_lang, 5)
+    trainIters(encoder1, 
+               attn_decoder1, 
+               lang, 
+               lines, 
+               train_iters, 
+               print_every=train_iters // 20, 
+               plot_every=train_iters // 20)
+    
+    #evaluateRandomly(encoder1, decoder1, imdb_lang, 5)
