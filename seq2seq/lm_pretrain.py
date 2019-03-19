@@ -45,27 +45,6 @@ def tensorsForTrain(lang, sentence):
 
 def indexFromTensor(lang, decoder_output):
     return decoder_output.max(0)[1]
-
-class pretrainLSTM(nn.Module):
-    def __init__(self, input_size, hidden_size, num_layers=1):
-        super().__init__()
-        self.input_size = input_size
-        self.hidden_size = hidden_size
-
-        self.embedding = nn.Embedding(input_size, hidden_size)
-        self.lstm = nn.LSTM(hidden_size, hidden_size, num_layers=num_layers)
-        self.fc = nn.Linear(hidden_size, input_size)
-        
-    def forward(self, input, hidden):
-        embedded = self.embedding(input).view(1, 1, -1)
-        output = embedded
-        output, hidden = self.lstm(output, hidden)
-        output = self.fc(output)
-        return output, hidden
-
-    def initHidden(self):
-        return (torch.zeros(1, 1, self.hidden_size, device=device),
-                torch.zeros(1, 1, self.hidden_size, device=device))
     
 MAX_LENGTH = 42 # max(map(lambda x: len(x.split()), imdb_lines)) == 2516
 

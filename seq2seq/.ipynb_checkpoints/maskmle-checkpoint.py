@@ -21,8 +21,7 @@ from torchnlp.datasets import imdb_dataset
 from torchnlp.datasets import penn_treebank_dataset
 
 from models import EncoderRNN, AttnDecoderRNN
-from lm_pretrain import pretrainLSTM
-from data_preparation import prepareData, Lang
+from data_preparation import prepareData, Lang, pretrainLSTM
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -220,7 +219,7 @@ def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_ev
             plot_loss_avg = plot_loss_total / plot_every
             plot_losses.append(plot_loss_avg)
             plot_loss_total = 0
-    showPlot(plot_losses)
+    #showPlot(plot_losses)
         
 
 def asMinutes(s):
@@ -294,8 +293,7 @@ def evaluateRandomly(encoder, decoder, input_lang, n=10):
     
 # OPERATING
 
-if __name__ == "__main__":
-    
+def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     SOS_token = 0
     EOS_token = 1
@@ -355,3 +353,7 @@ if __name__ == "__main__":
                plot_every=train_iters // 20)
     
     #evaluateRandomly(encoder1, decoder1, imdb_lang, 5)
+
+if __name__ == "__main__":
+    main()
+    
