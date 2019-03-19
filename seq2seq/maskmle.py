@@ -481,10 +481,10 @@ if __name__ == "__main__":
     
     def copy_lstm_weights(from_, *args):
         for to_ in args:
-            to_.weight_ih_l = from_.weight_ih_l
-            to_.weight_hh_l = from_.weight_hh_l
-            to_.bias_ih_l = from_.bias_ih_l
-            to_.bias_hh_l = from_.bias_hh_l
+            to_.weight_ih_l0 = from_.weight_ih_l0
+            to_.weight_hh_l0 = from_.weight_hh_l0
+            to_.bias_ih_l0 = from_.bias_ih_l0
+            to_.bias_hh_l0 = from_.bias_hh_l0
     
     copy_lstm_weights(pretainedlstm.lstm, encoder1.lstm, attn_decoder1.lstm)
     #copy_lstm_weights(pretainedlstm.lstm, attn_decoder1.lstm)
