@@ -164,6 +164,11 @@ if __name__ == "__main__":
     train_iters = 10
     dataset = 'imdb'
     lang_filename = './data/' + dataset + '_lang.pkl'
+    model_filename = ''.join(['./pretrained/pretrained_lstm_', 
+                              dataset, '_', 
+                              str(hidden_size), '_', 
+                              str(train_iters), '.pkl'])
+    
     if os.path.exists(lang_filename):
         with open(lang_filename, 'rb') as file:
             (lang, lines) = pkl.load(file)
@@ -171,13 +176,10 @@ if __name__ == "__main__":
         lang, lines = prepareData(dataset)
         with open(lang_filename, 'wb') as file:
             pkl.dump((lang, lines), file)
-    
-    #print(random.choice(imdb_lines))
-    
-    
-    model_filename = './pretrained/pretrained_lstm_' + dataset + '_' + str(hidden_size) + '_' + str(train_iters) + '.pkl'
+
+
     lstm = pretrainLSTM(lang.n_words, hidden_size).to(device)
-    print('using hidden_size=' + str(hidden_size))
+    print('using hidden_size=' + str(hidden_size), ' train_iters = ', train_iters)
     trainIters(lstm, lang, 
                lines, 
                train_iters, 

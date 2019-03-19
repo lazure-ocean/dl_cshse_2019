@@ -20,6 +20,8 @@ from torchnlp.datasets import penn_treebank_dataset
 
 MAX_LENGTH = 42
 
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
 class pretrainLSTM(nn.Module):
     def __init__(self, input_size, hidden_size, num_layers=1):
         super().__init__()

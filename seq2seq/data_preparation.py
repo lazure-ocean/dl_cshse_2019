@@ -91,3 +91,15 @@ def prepareData(dataset_title):
     print("Counted words:")
     print(lang.name, lang.n_words)
     return lang, lines
+
+def cachePrepareData(dataset_title):
+    
+    lang_filename = './data/' + dataset_title + '_lang.pkl'
+    if os.path.exists(lang_filename):
+        with open(lang_filename, 'rb') as file:
+            (lang, lines) = pkl.load(file)
+    else:
+        lang, lines = prepareData(dataset_title)
+        with open(lang_filename, 'wb') as file:
+            pkl.dump((lang, lines), file)
+    return lang, lines
