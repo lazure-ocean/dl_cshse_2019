@@ -20,167 +20,21 @@ import torch.nn.functional as F
 from torchnlp.datasets import imdb_dataset
 from torchnlp.datasets import penn_treebank_dataset
 
+from models import EncoderRNN, AttnDecoderRNN
 from lm_pretrain import pretrainLSTM
+from data_preparation import prepareData, Lang
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# GETTING DATA
 
 SOS_token = 0
 EOS_token = 1
 MASKED_token = 2
 MAX_LENGTH = 42
 
-class Lang:
-    def __init__(self, name):
-        self.name = name
-        self.word2index = {"SOSTOKEN": 0, "EOSTOKEN": 1, "MASKEDTOKEN": 2}
-        self.index2word = {0: "SOSTOKEN", 1: "EOSTOKEN", 2: "MASKEDTOKEN"}
-        self.word2count = {"SOSTOKEN": 0, "EOSTOKEN": 0, "MASKEDTOKEN": 0}
-        
-        self.n_words = 3  # Count SOS and EOS and Masked token
-
-    def addSentence(self, sentence):
-        for word in sentence.split(' '):
-            self.addWord(word)
-
-    def addWord(self, word):
-        if word not in self.word2index:
-            self.word2index[word] = self.n_words
-            self.word2count[word] = 1
-            self.index2word[self.n_words] = word
-            self.n_words += 1
-        else:
-            self.word2count[word] += 1
-            
-
-def unicodeToAscii(s):
-    """
-    Turn a Unicode string to plain ASCII, thanks to
-    https://stackoverflow.com/a/518232/2809427
-    """
-    return ''.join(
-        c for c in unicodedata.normalize('NFD', s)
-        if unicodedata.category(c) != 'Mn'
-    )
-
-def normalizeString(s): # Lowercase, trim, and remove non-letter characters
-    s = unicodeToAscii(s.lower().strip())
-    #s = re.sub(r"([.!?])", r" \1", s)
-    #s = re.sub(r"[^a-zA-Z.!?]+", r" ", s)
-    s = re.sub(r"[^a-zA-Z]+", r" ", s)
-    s = " ".join(s.split()[:40])
-    return s
-
-def readLang(dataset_title):
-    """
-    Args:
-        dataset_title: either 'imdb' or 'ptb'
-    """
-    print("Reading lines...")
-    if dataset_title == 'imdb':
-        train = imdb_dataset(train=True, directory='../data/')
-        # Read the dataset and split into lines
-        lines = [train[ind]['text'].strip() for ind, doc in enumerate(train)]
-        # Normalize lines
-        lines = [' '.join(["SOSTOKEN", normalizeString(s), "EOSTOKEN"]) for s in lines]
-        lang = Lang(dataset_title)
-    elif dataset_title == 'ptb':
-        raise NotImplementedError   
-    return lang, lines
-
-def prepareData(dataset_title):
-    lang, lines = readLang(dataset_title)
-    print("Read %s sentence pairs" % len(lines))
-    print("Counting words...")
-    for l in lines:
-        lang.addSentence(l)
-    print("Counted words:")
-    print(lang.name, lang.n_words)
-    return lang, lines
-
-# MODEL
-
-class EncoderRNN(nn.Module):
-    def __init__(self, input_size, hidden_size):
-        super(EncoderRNN, self).__init__()
-        self.hidden_size = hidden_size
-
-        self.embedding = nn.Embedding(input_size, hidden_size)
-        #self.gru = nn.GRU(hidden_size, hidden_size)
-        self.lstm = nn.LSTM(hidden_size, hidden_size)
-
-    def forward(self, input, hidden):
-        embedded = self.embedding(input).view(1, 1, -1)
-        output = embedded
-        #output, hidden = self.gru(output, hidden)
-        output, hidden = self.lstm(output, hidden)
-        return output, hidden
-
-    def initHidden(self):
-        return (torch.zeros(1, 1, self.hidden_size, device=device),
-                torch.zeros(1, 1, self.hidden_size, device=device))
-    
-class DecoderRNN(nn.Module):
-    def __init__(self, hidden_size, output_size):
-        super(DecoderRNN, self).__init__()
-        self.hidden_size = hidden_size
-
-        self.embedding = nn.Embedding(output_size, hidden_size)
-        #self.gru = nn.GRU(hidden_size, hidden_size)
-        self.lstm = nn.LSTM(hidden_size, hidden_size)
-        self.out = nn.Linear(hidden_size, output_size)
-        self.softmax = nn.LogSoftmax(dim=1)
-
-    def forward(self, input, hidden):
-        output = self.embedding(input).view(1, 1, -1)
-        output = F.relu(output)
-        #output, hidden = self.gru(output, hidden)
-        output, hidden = self.lstm(output, hidden)
-        output = self.softmax(self.out(output[0]))
-        return output, hidden
-
-    def initHidden(self):
-        return (torch.zeros(1, 1, self.hidden_size, device=device),
-                torch.zeros(1, 1, self.hidden_size, device=device))
     
 def count_parameters(model):
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     return sum([np.prod(p.size()) for p in model_parameters])
-
-class AttnDecoderRNN(nn.Module):
-    def __init__(self, hidden_size, output_size, dropout_p=0.1, max_length=MAX_LENGTH):
-        super(AttnDecoderRNN, self).__init__()
-        self.hidden_size = hidden_size
-        self.output_size = output_size
-        self.dropout_p = dropout_p
-        self.max_length = max_length
-
-        self.embedding = nn.Embedding(self.output_size, self.hidden_size)
-        self.attn = nn.Linear(self.hidden_size * 2, self.max_length)
-        self.attn_combine = nn.Linear(self.hidden_size * 2, self.hidden_size)
-        self.dropout = nn.Dropout(self.dropout_p)
-        self.lstm = nn.LSTM(self.hidden_size, self.hidden_size)
-        self.out = nn.Linear(self.hidden_size, self.output_size)
-
-    def forward(self, input, hidden, encoder_outputs):
-        embedded = self.embedding(input).view(1, 1, -1)
-        embedded = self.dropout(embedded)
-        attn_weights = F.softmax(
-            self.attn(torch.cat((embedded[0], hidden[0][0]), 1)), dim=1)
-        attn_applied = torch.bmm(attn_weights.unsqueeze(0),
-                                 encoder_outputs.unsqueeze(0))
-        output = torch.cat((embedded[0], attn_applied[0]), 1)
-        output = self.attn_combine(output).unsqueeze(0)
-
-        output = F.relu(output)
-        output, hidden = self.lstm(output, hidden)
-
-        output = F.log_softmax(self.out(output[0]), dim=1)
-        return output, hidden, attn_weights
-
-    def initHidden(self):
-        return torch.zeros(1, 1, self.hidden_size, device=device)
 
     
 # PREPARING TRAINING DATA
@@ -450,7 +304,7 @@ if __name__ == "__main__":
     
     
     hidden_size = 325
-    train_iters = 100
+    train_iters = 20
     pretrain_train_iters = 2000
     dataset = 'imdb'
     lang_filename = './data/' + dataset + '_lang.pkl'

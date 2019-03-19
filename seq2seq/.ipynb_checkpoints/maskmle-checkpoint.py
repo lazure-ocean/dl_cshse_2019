@@ -3,7 +3,9 @@ from io import open
 import unicodedata
 import string
 import re
+import os
 import random
+import pickle as pkl
 import math
 from time import time
 
@@ -18,165 +20,21 @@ import torch.nn.functional as F
 from torchnlp.datasets import imdb_dataset
 from torchnlp.datasets import penn_treebank_dataset
 
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+from models import EncoderRNN, AttnDecoderRNN
+from lm_pretrain import pretrainLSTM
+from data_preparation import prepareData, Lang
 
-# GETTING DATA
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 SOS_token = 0
 EOS_token = 1
 MASKED_token = 2
+MAX_LENGTH = 42
 
-
-class Lang:
-    def __init__(self, name):
-        self.name = name
-        self.word2index = {"SOSTOKEN": 0, "EOSTOKEN": 1, "MASKEDTOKEN": 2}
-        self.index2word = {0: "SOSTOKEN", 1: "EOSTOKEN", 2: "MASKEDTOKEN"}
-        self.word2count = {"SOSTOKEN": 0, "EOSTOKEN": 0, "MASKEDTOKEN": 0}
-        
-        self.n_words = 3  # Count SOS and EOS and Masked token
-
-    def addSentence(self, sentence):
-        for word in sentence.split(' '):
-            self.addWord(word)
-
-    def addWord(self, word):
-        if word not in self.word2index:
-            self.word2index[word] = self.n_words
-            self.word2count[word] = 1
-            self.index2word[self.n_words] = word
-            self.n_words += 1
-        else:
-            self.word2count[word] += 1
-            
-
-def unicodeToAscii(s):
-    """
-    Turn a Unicode string to plain ASCII, thanks to
-    https://stackoverflow.com/a/518232/2809427
-    """
-    return ''.join(
-        c for c in unicodedata.normalize('NFD', s)
-        if unicodedata.category(c) != 'Mn'
-    )
-
-def normalizeString(s): # Lowercase, trim, and remove non-letter characters
-    s = unicodeToAscii(s.lower().strip())
-    #s = re.sub(r"([.!?])", r" \1", s)
-    #s = re.sub(r"[^a-zA-Z.!?]+", r" ", s)
-    s = re.sub(r"[^a-zA-Z]+", r" ", s)
-    s = " ".join(s.split()[:40])
-    return s
-
-def readLang(dataset_title):
-    """
-    Args:
-        dataset_title: either 'imdb' or 'ptb'
-    """
-    print("Reading lines...")
-    if dataset_title == 'imdb':
-        train = imdb_dataset(train=True, directory='../data/')
-        # Read the dataset and split into lines
-        lines = [train[ind]['text'].strip() for ind, doc in enumerate(train)]
-        # Normalize lines
-        lines = [' '.join(["SOSTOKEN", normalizeString(s), "EOSTOKEN"]) for s in lines]
-        lang = Lang(dataset_title)
-    elif dataset_title == 'ptb':
-        raise NotImplementedError   
-    return lang, lines
-
-def prepareData(dataset_title):
-    lang, lines = readLang(dataset_title)
-    print("Read %s sentence pairs" % len(lines))
-    print("Counting words...")
-    for l in lines:
-        lang.addSentence(l)
-    print("Counted words:")
-    print(lang.name, lang.n_words)
-    return lang, lines
-
-# MODEL
-
-class EncoderRNN(nn.Module):
-    def __init__(self, input_size, hidden_size):
-        super(EncoderRNN, self).__init__()
-        self.hidden_size = hidden_size
-
-        self.embedding = nn.Embedding(input_size, hidden_size)
-        #self.gru = nn.GRU(hidden_size, hidden_size)
-        self.lstm = nn.LSTM(hidden_size, hidden_size)
-
-    def forward(self, input, hidden):
-        embedded = self.embedding(input).view(1, 1, -1)
-        output = embedded
-        #output, hidden = self.gru(output, hidden)
-        output, hidden = self.lstm(output, hidden)
-        return output, hidden
-
-    def initHidden(self):
-        return (torch.zeros(1, 1, self.hidden_size, device=device),
-                torch.zeros(1, 1, self.hidden_size, device=device))
-    
-class DecoderRNN(nn.Module):
-    def __init__(self, hidden_size, output_size):
-        super(DecoderRNN, self).__init__()
-        self.hidden_size = hidden_size
-
-        self.embedding = nn.Embedding(output_size, hidden_size)
-        #self.gru = nn.GRU(hidden_size, hidden_size)
-        self.lstm = nn.LSTM(hidden_size, hidden_size)
-        self.out = nn.Linear(hidden_size, output_size)
-        self.softmax = nn.LogSoftmax(dim=1)
-
-    def forward(self, input, hidden):
-        output = self.embedding(input).view(1, 1, -1)
-        output = F.relu(output)
-        #output, hidden = self.gru(output, hidden)
-        output, hidden = self.lstm(output, hidden)
-        output = self.softmax(self.out(output[0]))
-        return output, hidden
-
-    def initHidden(self):
-        return (torch.zeros(1, 1, self.hidden_size, device=device),
-                torch.zeros(1, 1, self.hidden_size, device=device))
     
 def count_parameters(model):
     model_parameters = filter(lambda p: p.requires_grad, model.parameters())
     return sum([np.prod(p.size()) for p in model_parameters])
-
-class AttnDecoderRNN(nn.Module):
-    def __init__(self, hidden_size, output_size, dropout_p=0.1, max_length=MAX_LENGTH):
-        super(AttnDecoderRNN, self).__init__()
-        self.hidden_size = hidden_size
-        self.output_size = output_size
-        self.dropout_p = dropout_p
-        self.max_length = max_length
-
-        self.embedding = nn.Embedding(self.output_size, self.hidden_size)
-        self.attn = nn.Linear(self.hidden_size * 2, self.max_length)
-        self.attn_combine = nn.Linear(self.hidden_size * 2, self.hidden_size)
-        self.dropout = nn.Dropout(self.dropout_p)
-        self.lstm = nn.LSTM(self.hidden_size, self.hidden_size)
-        self.out = nn.Linear(self.hidden_size, self.output_size)
-
-    def forward(self, input, hidden, encoder_outputs):
-        embedded = self.embedding(input).view(1, 1, -1)
-        embedded = self.dropout(embedded)
-        attn_weights = F.softmax(
-            self.attn(torch.cat((embedded[0], hidden[0][0]), 1)), dim=1)
-        attn_applied = torch.bmm(attn_weights.unsqueeze(0),
-                                 encoder_outputs.unsqueeze(0))
-        output = torch.cat((embedded[0], attn_applied[0]), 1)
-        output = self.attn_combine(output).unsqueeze(0)
-
-        output = F.relu(output)
-        output, hidden = self.lstm(output, hidden)
-
-        output = F.log_softmax(self.out(output[0]), dim=1)
-        return output, hidden, attn_weights
-
-    def initHidden(self):
-        return torch.zeros(1, 1, self.hidden_size, device=device)
 
     
 # PREPARING TRAINING DATA
@@ -190,7 +48,7 @@ def generate_mask(sequence_length, batch_size=None, is_present=0.7):
         mask = np.random.binomial(1, is_present, size=(batch_size, sequence_length))
     elif batch_size is None:
         mask = np.random.binomial(1, is_present, size=(sequence_length,))
-    return torch.from_numpy(mask).long()
+    return torch.from_numpy(mask).long().to(device)
 
 def transform_input_with_is_missing_token(inputs, targets_present, masked_value="MASKEDTOKEN"):
     """
@@ -238,10 +96,7 @@ def indexFromTensor(lang, decoder_output):
 
 # TRAINING MODEL
 
-MAX_LENGTH = 42 
-
 def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, decoder_optimizer, lang, criterion, max_length=MAX_LENGTH):
-    #c_ = time()
     encoder_hidden = encoder.initHidden()
 
     encoder_optimizer.zero_grad()
@@ -263,15 +118,11 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
     decoder_hidden = encoder_hidden
 
     for di in range(input_length):        
-        #print(encoder_outputs.shape)
         decoder_output, decoder_hidden, decoder_attention  = decoder(
             decoder_input, decoder_hidden, encoder_outputs)      
         loss += criterion(decoder_output, target_tensor[di + 1])
 
         if input_tensor[di + 1].item() == MASKED_token:
-            #topv, topi = decoder_output.topk(1)
-            #decoder_input = topi.squeeze().detach()  # detach from history as input
-            #print(decoder_output.min())
             token_sample = torch.multinomial(torch.exp(decoder_output), 1)
             decoder_input = token_sample.squeeze().detach()
         else:
@@ -289,35 +140,81 @@ def train(input_tensor, target_tensor, encoder, decoder, encoder_optimizer, deco
 
     return loss.item() / input_length
 
+def test(input_tensor, target_tensor, encoder, decoder, lang, criterion, max_length=MAX_LENGTH):
+    encoder_hidden = encoder.initHidden()
+
+    input_length = input_tensor.size(0)
+    
+    encoder_outputs = torch.zeros(max_length, encoder.hidden_size, device=device)
+
+    loss = 0
+
+    for ei in range(input_length):
+        encoder_output, encoder_hidden = encoder(
+            input_tensor[ei], encoder_hidden)
+        encoder_outputs[ei] = encoder_output[0, 0]
+
+        
+    decoder_input = input_tensor[0]
+    decoder_hidden = encoder_hidden
+
+    for di in range(input_length):        
+        decoder_output, decoder_hidden, decoder_attention  = decoder(
+            decoder_input, decoder_hidden, encoder_outputs)      
+        loss += criterion(decoder_output, target_tensor[di + 1])
+
+        if input_tensor[di + 1].item() == MASKED_token:
+            token_sample = torch.multinomial(torch.exp(decoder_output), 1)
+            decoder_input = token_sample.squeeze().detach()
+        else:
+            decoder_input = input_tensor[di + 1]
+
+        if input_tensor[di + 1].item() == EOS_token:
+            break
+    return loss.item() / input_length
+
 def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):
     #start = time.time()
     start = time()
     plot_losses = []
     print_loss_total = 0  # Reset every print_every
     plot_loss_total = 0  # Reset every plot_every
+    print_loss_val = 0  # Reset every print_every
+    plot_loss_val = 0
 
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
-    training_pairs = [tensorsForTrain(lang, random.choice(lines)) for i in range(n_iters)]
+    training_pairs = [tensorsForTrain(lang, random.choice(lines)) for i in range(2 * n_iters + 2)]
     
     criterion = nn.NLLLoss()
     
     for iter in range(1, n_iters + 1):
-        training_pair = training_pairs[iter - 1]
+        training_pair = training_pairs[2 * iter - 2]
         input_tensor = training_pair[0]
         target_tensor = training_pair[1]
 
         loss = train(input_tensor, target_tensor, encoder,
                      decoder, encoder_optimizer, decoder_optimizer, lang, criterion)
-
+        
         print_loss_total += loss
         plot_loss_total += loss
+        
+        training_pair = training_pairs[2 * iter - 1]
+        input_tensor = training_pair[0]
+        target_tensor = training_pair[1]
+        
+        loss = test(input_tensor, target_tensor, encoder,
+                     decoder, lang, criterion)
+        print_loss_val += loss
+        plot_loss_val += loss
 
         if iter % print_every == 0:
+            print_loss_avg_val = print_loss_val / print_every
+            print_loss_val = 0
             print_loss_avg = print_loss_total / print_every
             print_loss_total = 0
-            print('%s (%d %d%%) %.4f' % (timeSince(start, iter / n_iters),
-                                         iter, iter / n_iters * 100, print_loss_avg))
+            print('%s (%d %d%%) train: %.4f val: %.4f' % (timeSince(start, iter / n_iters),
+                                         iter, iter / n_iters * 100, print_loss_avg, print_loss_avg_val))
 
         if iter % plot_every == 0:
             plot_loss_avg = plot_loss_total / plot_every
@@ -399,9 +296,16 @@ def evaluateRandomly(encoder, decoder, input_lang, n=10):
 
 if __name__ == "__main__":
     
-    hidden_size = 64
-    train_iters = 10
-    pretrain_train_iters = 1000
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    SOS_token = 0
+    EOS_token = 1
+    MASKED_token = 2
+    MAX_LENGTH = 42
+    
+    
+    hidden_size = 325
+    train_iters = 20
+    pretrain_train_iters = 2000
     dataset = 'imdb'
     lang_filename = './data/' + dataset + '_lang.pkl'
     
@@ -419,19 +323,35 @@ if __name__ == "__main__":
     model_filename = './pretrained/maskmle_' + dataset + '_' + str(hidden_size) + '_' + str(train_iters) + '.pkl'
     
     if os.path.exists(pretrained_filename):
-        pretainedlstm = pretrainLSTM(lang.n_words, hidden_size).to(device)
+        with open(pretrained_filename, 'rb') as file:
+            pretainedlstm = pkl.load(file)
+    else:
+        raise NotImplementedError ('pretrained lstm is not available')
+            
+            
+    encoder1 = EncoderRNN(lang.n_words, hidden_size).to(device)
+    attn_decoder1 = AttnDecoderRNN(hidden_size, lang.n_words, dropout_p=0.1).to(device)
+    print("Total number of trainable parameters:", count_parameters(encoder1) + count_parameters(attn_decoder1))
     
-    print('using hidden_size=' + str(hidden_size))
-    trainIters(lstm, lang, 
+    def copy_lstm_weights(from_, *args):
+        for to_ in args:
+            to_.weight_ih_l0 = from_.weight_ih_l0
+            to_.weight_hh_l0 = from_.weight_hh_l0
+            to_.bias_ih_l0 = from_.bias_ih_l0
+            to_.bias_hh_l0 = from_.bias_hh_l0
+    
+    copy_lstm_weights(pretainedlstm.lstm, encoder1.lstm, attn_decoder1.lstm)
+    #copy_lstm_weights(pretainedlstm.lstm, attn_decoder1.lstm)
+    
+    encoder1.embedding.weight = pretainedlstm.embedding.weight
+    attn_decoder1.embedding.weight = pretainedlstm.embedding.weight
+    
+    trainIters(encoder1, 
+               attn_decoder1, 
+               lang, 
                lines, 
                train_iters, 
-               print_every=train_iters//20 + 1, 
-               plot_every=train_iters//50 + 1)
-    with open(model_filename, 'wb') as file:
-        pkl.dump(lstm, file)
-
-encoder1 = EncoderRNN(imdb_lang.n_words, hidden_size).to(device)
-decoder1 = DecoderRNN(hidden_size, imdb_lang.n_words)
-print("Total number of trainable parameters:", count_parameters(encoder1) + count_parameters(decoder1))
-trainIters(encoder1, decoder1, imdb_lang, imdb_lines, 1000, print_every=50, plot_every=5)
-evaluateRandomly(encoder1, decoder1, imdb_lang, 5)
+               print_every=train_iters // 20, 
+               plot_every=train_iters // 20)
+    
+    #evaluateRandomly(encoder1, decoder1, imdb_lang, 5)
