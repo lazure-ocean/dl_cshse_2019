@@ -20,8 +20,8 @@ import torch.nn.functional as F
 from torchnlp.datasets import imdb_dataset
 from torchnlp.datasets import penn_treebank_dataset
 
-from models import EncoderRNN, AttnDecoderRNN
-from data_preparation import prepareData, Lang, pretrainLSTM
+from models import EncoderRNN, AttnDecoderRNN, pretrainLSTM
+from data_preparation import prepareData, Lang
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
