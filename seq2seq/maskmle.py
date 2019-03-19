@@ -194,7 +194,7 @@ def generate_mask(sequence_length, batch_size=None, is_present=0.7):
         mask = np.random.binomial(1, is_present, size=(batch_size, sequence_length))
     elif batch_size is None:
         mask = np.random.binomial(1, is_present, size=(sequence_length,))
-    return torch.from_numpy(mask).long()
+    return torch.from_numpy(mask).long().to(device)
 
 def transform_input_with_is_missing_token(inputs, targets_present, masked_value="MASKEDTOKEN"):
     """
