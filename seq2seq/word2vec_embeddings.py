@@ -40,7 +40,7 @@ def train_word2vec(lang, lines, size, PATH=None):
     print('Time to build vocab: {} mins'.format(round((time() - t) / 60, 2)))
     
     t = time()
-    w2v_model.train(lines, total_examples=w2v_model.corpus_count, epochs=5, report_delay=1)
+    w2v_model.train(lines, total_examples=w2v_model.corpus_count, epochs=30, report_delay=1)
     print('Time to train the model: {} mins'.format(round((time() - t) / 60, 2)))
     w2v_model.init_sims(replace=True)
     print('w2v: ', w2v_model.wv)
