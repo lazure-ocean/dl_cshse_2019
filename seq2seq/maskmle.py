@@ -172,7 +172,7 @@ def test(input_tensor, target_tensor, encoder, decoder, lang, criterion, max_len
             break
     return loss.item() / input_length
 
-def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_every=100, test_every=10, learning_rate=0.01):
+def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_every=100, test_every=1, learning_rate=0.01):
     #start = time.time()
     start = time()
     plot_losses = []
@@ -188,7 +188,7 @@ def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_ev
     criterion = nn.NLLLoss()
     test_count = 0
     for iter in range(1, n_iters + 1):
-        training_pair = training_pairs[2 * iter - 2]
+        training_pair = training_pairs[iter - 1]
         input_tensor = training_pair[0]
         target_tensor = training_pair[1]
 
@@ -201,13 +201,12 @@ def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_ev
         
         
         if iter % test_every == 0:
-            test_pair = test_pairs[iter - 1]
+            test_pair = test_pairs[iter // test_every - 1]
             input_tensor = test_pair[0]
             target_tensor = test_pair[1]
             loss = test(input_tensor, target_tensor, encoder,
                          decoder, lang, criterion)
             print_loss_val += loss
-            plot_loss_val += loss
             test_count += 1
 
         if iter % print_every == 0:
@@ -304,8 +303,8 @@ def main():
     
     
     hidden_size = 325
-    train_iters = 5
-    pretrain_train_iters = 2000
+    train_iters = 20
+    pretrain_train_iters = 10
     dataset = 'imdb'
     lang, lines = cachePrepareData(dataset)
 
@@ -349,8 +348,8 @@ def main():
                lang, 
                lines, 
                train_iters, 
-               print_every=train_iters // 20 + 1, 
-               plot_every=train_iters // 20 + 1)
+               print_every=train_iters // 20, 
+               plot_every=train_iters // 20)
     torch.save(encoder1.state_dict(), PATH + 'e_' + model_filename)
     torch.save(attn_decoder1.state_dict(), PATH + 'd_' + model_filename)
     evaluateRandomly(encoder1, attn_decoder1, lang, lines, 5)
