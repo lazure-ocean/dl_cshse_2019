@@ -278,7 +278,6 @@ def evaluate(encoder, decoder, input_lang, input_tensor, max_length=MAX_LENGTH):
                 decoded_words.append(input_lang.index2word[decoder_input.item()])
             
             if input_tensor[di + 1].item() == EOS_token:
-                decoded_words.append('EOSTOKEN')
                 break
                 
         return decoded_words
