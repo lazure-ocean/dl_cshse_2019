@@ -172,7 +172,7 @@ def test(input_tensor, target_tensor, encoder, decoder, lang, criterion, max_len
             break
     return loss.item() / input_length
 
-def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_every=100, test_every=1, learning_rate=0.01):
+def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_every=100, test_every=7, learning_rate=0.01):
     #start = time.time()
     start = time()
     plot_losses = []
@@ -187,6 +187,7 @@ def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_ev
     
     criterion = nn.NLLLoss()
     test_count = 0
+    test_every = min(test_every, print_every)
     for iter in range(1, n_iters + 1):
         training_pair = training_pairs[iter - 1]
         input_tensor = training_pair[0]
@@ -303,7 +304,7 @@ def main():
     
     
     hidden_size = 325
-    train_iters = 20
+    train_iters = 40
     pretrain_train_iters = 10
     dataset = 'imdb'
     lang, lines = cachePrepareData(dataset)
