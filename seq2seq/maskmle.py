@@ -314,7 +314,7 @@ def main():
     if os.path.exists(pretrained_filename):
         pretainedlstm = pretrainLSTM(lang.n_words, hidden_size).to(device)
         pretainedlstm.load_state_dict(torch.load(pretrained_filename))
-    else if os.path.exists(pretrained_filename[:-2] + 'pkl'):
+    elif os.path.exists(pretrained_filename[:-2] + 'pkl'):
         with open(pretrained_filename[:-2] + 'pkl', 'rb') as file:
             pretainedlstm = pkl.load(file)
     else:
