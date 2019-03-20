@@ -172,7 +172,7 @@ def test(input_tensor, target_tensor, encoder, decoder, lang, criterion, max_len
             break
     return loss.item() / input_length
 
-def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_every=100, test_every=10 learning_rate=0.01):
+def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_every=100, test_every=10, learning_rate=0.01):
     #start = time.time()
     start = time()
     plot_losses = []
@@ -182,8 +182,8 @@ def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_ev
 
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
-    training_pairs = [tensorFromSentence(lang, lines[i]) for i in range(n_iters)]
-    test_pairs = [tensorFromSentence(lang, lines[n_iters + i]) for i in range(n_iters // test_every)]
+    training_pairs = [tensorsForTrain(lang, lines[i]) for i in range(n_iters)]
+    test_pairs = [tensorsForTrain(lang, lines[n_iters + i]) for i in range(n_iters // test_every)]
     
     criterion = nn.NLLLoss()
     test_count = 0
