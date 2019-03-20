@@ -179,7 +179,8 @@ def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_ev
     print_loss_total = 0  # Reset every print_every
     plot_loss_total = 0  # Reset every plot_every
     print_loss_val = 0  # Reset every print_every
-
+    test_every = min(test_every, print_every)
+    
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
     training_pairs = [tensorsForTrain(lang, lines[i]) for i in range(n_iters)]
@@ -187,7 +188,7 @@ def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_ev
     
     criterion = nn.NLLLoss()
     test_count = 0
-    test_every = min(test_every, print_every)
+    
     for iter in range(1, n_iters + 1):
         training_pair = training_pairs[iter - 1]
         input_tensor = training_pair[0]
