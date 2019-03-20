@@ -172,21 +172,21 @@ def test(input_tensor, target_tensor, encoder, decoder, lang, criterion, max_len
             break
     return loss.item() / input_length
 
-def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_every=100, learning_rate=0.01):
+def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_every=100, test_every=10 learning_rate=0.01):
     #start = time.time()
     start = time()
     plot_losses = []
     print_loss_total = 0  # Reset every print_every
     plot_loss_total = 0  # Reset every plot_every
     print_loss_val = 0  # Reset every print_every
-    plot_loss_val = 0
 
     encoder_optimizer = optim.SGD(encoder.parameters(), lr=learning_rate)
     decoder_optimizer = optim.SGD(decoder.parameters(), lr=learning_rate)
-    training_pairs = [tensorsForTrain(lang, random.choice(lines)) for i in range(2 * n_iters + 2)]
+    training_pairs = [tensorFromSentence(lang, lines[i]) for i in range(n_iters)]
+    test_pairs = [tensorFromSentence(lang, lines[n_iters + i]) for i in range(n_iters // test_every)]
     
     criterion = nn.NLLLoss()
-    
+    test_count = 0
     for iter in range(1, n_iters + 1):
         training_pair = training_pairs[2 * iter - 2]
         input_tensor = training_pair[0]
@@ -198,17 +198,21 @@ def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_ev
         print_loss_total += loss
         plot_loss_total += loss
         
-        training_pair = training_pairs[2 * iter - 1]
-        input_tensor = training_pair[0]
-        target_tensor = training_pair[1]
         
-        loss = test(input_tensor, target_tensor, encoder,
-                     decoder, lang, criterion)
-        print_loss_val += loss
-        plot_loss_val += loss
+        
+        if iter % test_every == 0:
+            test_pair = test_pairs[iter - 1]
+            input_tensor = test_pair[0]
+            target_tensor = test_pair[1]
+            loss = test(input_tensor, target_tensor, encoder,
+                         decoder, lang, criterion)
+            print_loss_val += loss
+            plot_loss_val += loss
+            test_count += 1
 
         if iter % print_every == 0:
-            print_loss_avg_val = print_loss_val / print_every
+            print_loss_avg_val = print_loss_val / test_every
+            test_every = 0
             print_loss_val = 0
             print_loss_avg = print_loss_total / print_every
             print_loss_total = 0
