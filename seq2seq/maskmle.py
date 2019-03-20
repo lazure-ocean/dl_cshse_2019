@@ -286,10 +286,10 @@ def evaluate(encoder, decoder, input_lang, input_tensor, max_length=MAX_LENGTH):
                 
         return decoded_words
     
-def evaluateRandomly(encoder, decoder, input_lang, input_lines, n=10):
+def evaluateRandomly(encoder, decoder, input_lang, input_lines, n=10, is_present=0.5):
     for i in range(n):
         sentence = random.choice(input_lines)   
-        pair = tensorsForTrain(input_lang, sentence, is_present=0.1)
+        pair = tensorsForTrain(input_lang, sentence, is_present=is_present)
         print('real:\n', sentence)
         print('filled:\n', *evaluate(encoder, decoder, input_lang, pair[0]))
    
@@ -353,7 +353,8 @@ def main():
                plot_every=train_iters // 20)
     torch.save(encoder1.state_dict(), PATH + 'e_' + model_filename)
     torch.save(attn_decoder1.state_dict(), PATH + 'd_' + model_filename)
-    evaluateRandomly(encoder1, attn_decoder1, lang, lines, 5)
+    for i in range(10):
+        evaluateRandomly(encoder1, attn_decoder1, lang, lines, n=2, is_present=0.1*i)
 
 if __name__ == "__main__":
     main()
