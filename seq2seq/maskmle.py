@@ -302,7 +302,7 @@ def main():
     
     hidden_size = 325
     train_iters = 5
-    pretrain_train_iters = 10
+    pretrain_train_iters = 2000
     dataset = 'imdb'
     lang, lines = cachePrepareData(dataset)
 
