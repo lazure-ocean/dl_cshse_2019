@@ -211,8 +211,8 @@ def trainIters(encoder, decoder, lang, lines, n_iters, print_every=1000, plot_ev
             test_count += 1
 
         if iter % print_every == 0:
-            print_loss_avg_val = print_loss_val / test_every
-            test_every = 0
+            print_loss_avg_val = print_loss_val / test_count
+            test_count = 0
             print_loss_val = 0
             print_loss_avg = print_loss_total / print_every
             print_loss_total = 0
