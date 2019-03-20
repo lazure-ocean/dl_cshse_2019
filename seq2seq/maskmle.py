@@ -21,7 +21,7 @@ from torchnlp.datasets import imdb_dataset
 from torchnlp.datasets import penn_treebank_dataset
 
 from models import EncoderRNN, AttnDecoderRNN, pretrainLSTM
-from data_preparation import prepareData, Lang
+from data_preparation import cachePrepareData, Lang
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -83,8 +83,8 @@ def tensorFromSentence(lang, sentence):
     #indexes.append(EOS_token)
     return torch.tensor(indexes, dtype=torch.long, device=device).view(-1, 1)
 
-def tensorsForTrain(lang, sentence):
-    mask = generate_mask(len(sentence))
+def tensorsForTrain(lang, sentence, is_present=0.7):
+    mask = generate_mask(len(sentence), is_present=is_present)
     target_tensor = tensorFromSentence(lang, sentence)
     transformed_sentence = " ".join(transform_input_with_is_missing_token(sentence.split(), mask))
     input_tensor = tensorFromSentence(lang, transformed_sentence)
@@ -247,6 +247,7 @@ def showPlot(points):
     print('plot must be showing')
 
 # EVALUATING
+
 def evaluate(encoder, decoder, input_lang, input_tensor, max_length=MAX_LENGTH):
     with torch.no_grad():
         input_length = input_tensor.size()[0]
@@ -265,8 +266,8 @@ def evaluate(encoder, decoder, input_lang, input_tensor, max_length=MAX_LENGTH):
 
         for di in range(max_length):        
             
-            decoder_output, decoder_hidden = decoder(
-                decoder_input, decoder_hidden)      
+            decoder_output, decoder_hidden, decoder_attention = decoder(
+                decoder_input, decoder_hidden, encoder_outputs)      
 
             if input_tensor[di + 1].item() == MASKED_token:
                 token_sample = torch.multinomial(torch.exp(decoder_output), 1)
@@ -282,15 +283,13 @@ def evaluate(encoder, decoder, input_lang, input_tensor, max_length=MAX_LENGTH):
                 
         return decoded_words
     
-def evaluateRandomly(encoder, decoder, input_lang, n=10):
+def evaluateRandomly(encoder, decoder, input_lang, input_lines, n=10):
     for i in range(n):
-        
-        sentence = random.choice(imdb_lines)
-        pair = tensorsForTrain(input_lang, sentence)
+        sentence = random.choice(input_lines)   
+        pair = tensorsForTrain(input_lang, sentence, is_present=0.1)
         print('real:\n', sentence)
-        mask = generate_mask(len(sentence.split()), is_present=0.8)
-        print('filled:\n', *evaluate(encoder, decoder, input_lang, pair[1]))
-    
+        print('filled:\n', *evaluate(encoder, decoder, input_lang, pair[0]))
+   
 # OPERATING
 
 def main():
@@ -302,29 +301,21 @@ def main():
     
     
     hidden_size = 325
-    train_iters = 20
-    pretrain_train_iters = 2000
+    train_iters = 5
+    pretrain_train_iters = 10
     dataset = 'imdb'
-    lang_filename = './data/' + dataset + '_lang.pkl'
-    
-    if os.path.exists(lang_filename):
-        with open(lang_filename, 'rb') as file:
-            (lang, lines) = pkl.load(file)
-    else:
-        lang, lines = prepareData(dataset)
-        with open(lang_filename, 'wb') as file:
-            pkl.dump((lang, lines), file)
+    lang, lines = cachePrepareData(dataset)
 
+    PATH = './pretrained/'
+    pretrained_filename = PATH + 'pretrained_lstm_' + dataset + '_' + str(hidden_size) + '_' + str(pretrain_train_iters) + '.pt'
     
-    pretrained_filename = './pretrained/pretrained_lstm_' + dataset + '_' + str(hidden_size) + '_' + str(pretrain_train_iters) + '.pkl'
-    
-    model_filename = './pretrained/maskmle_' + dataset + '_' + str(hidden_size) + '_' + str(train_iters) + '.pkl'
+    model_filename = 'maskmle_' + dataset + '_' + str(hidden_size) + '_' + str(train_iters) + '.pt'
     
     if os.path.exists(pretrained_filename):
-        with open(pretrained_filename, 'rb') as file:
-            pretainedlstm = pkl.load(file)
+        pretainedlstm = pretrainLSTM(lang.n_words, hidden_size).to(device)
+        pretainedlstm.load_state_dict(torch.load(pretrained_filename))
     else:
-        raise NotImplementedError ('pretrained lstm is not available')
+        raise NotImplementedError ('pretrained lstm in ' + pretrained_filename + 'is not available')
             
             
     encoder1 = EncoderRNN(lang.n_words, hidden_size).to(device)
@@ -342,17 +333,21 @@ def main():
     #copy_lstm_weights(pretainedlstm.lstm, attn_decoder1.lstm)
     
     encoder1.embedding.weight = pretainedlstm.embedding.weight
+    encoder1.embedding.weight.requires_grad = False
     attn_decoder1.embedding.weight = pretainedlstm.embedding.weight
+    attn_decoder1.embedding.weight.requires_grad = False
+    print("Total number of trainable parameters after weight imports:", count_parameters(encoder1) + count_parameters(attn_decoder1))
     
     trainIters(encoder1, 
                attn_decoder1, 
                lang, 
                lines, 
                train_iters, 
-               print_every=train_iters // 20, 
-               plot_every=train_iters // 20)
-    
-    #evaluateRandomly(encoder1, decoder1, imdb_lang, 5)
+               print_every=train_iters // 20 + 1, 
+               plot_every=train_iters // 20 + 1)
+    torch.save(encoder1.state_dict(), PATH + 'e_' + model_filename)
+    torch.save(attn_decoder1.state_dict(), PATH + 'd_' + model_filename)
+    evaluateRandomly(encoder1, attn_decoder1, lang, lines, 5)
 
 if __name__ == "__main__":
     main()

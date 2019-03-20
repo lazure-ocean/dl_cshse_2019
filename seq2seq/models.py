@@ -49,13 +49,11 @@ class EncoderRNN(nn.Module):
         self.hidden_size = hidden_size
 
         self.embedding = nn.Embedding(input_size, hidden_size)
-        #self.gru = nn.GRU(hidden_size, hidden_size)
         self.lstm = nn.LSTM(hidden_size, hidden_size)
 
     def forward(self, input, hidden):
         embedded = self.embedding(input).view(1, 1, -1)
         output = embedded
-        #output, hidden = self.gru(output, hidden)
         output, hidden = self.lstm(output, hidden)
         return output, hidden
 
@@ -69,7 +67,6 @@ class DecoderRNN(nn.Module):
         self.hidden_size = hidden_size
 
         self.embedding = nn.Embedding(output_size, hidden_size)
-        #self.gru = nn.GRU(hidden_size, hidden_size)
         self.lstm = nn.LSTM(hidden_size, hidden_size)
         self.out = nn.Linear(hidden_size, output_size)
         self.softmax = nn.LogSoftmax(dim=1)

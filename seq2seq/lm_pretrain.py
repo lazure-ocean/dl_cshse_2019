@@ -18,7 +18,10 @@ import torch.nn.functional as F
 from torchnlp.datasets import imdb_dataset
 from torchnlp.datasets import penn_treebank_dataset
 
-from data_preparation import prepareData, Lang
+from gensim.models import Word2Vec
+from data_preparation import cachePrepareData, Lang
+from models import EncoderRNN, AttnDecoderRNN, pretrainLSTM, count_parameters
+from word2vec_embeddings import get_embeddings
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -160,31 +163,36 @@ def timeSince(since, percent):
 
 if __name__ == "__main__":
     
-    hidden_size = 64
+    hidden_size = 325
     train_iters = 10
     dataset = 'imdb'
-    lang_filename = './data/' + dataset + '_lang.pkl'
+    lang, lines = cachePrepareData(dataset)
+    
     model_filename = ''.join(['./pretrained/pretrained_lstm_', 
                               dataset, '_', 
                               str(hidden_size), '_', 
-                              str(train_iters), '.pkl'])
-    
-    if os.path.exists(lang_filename):
-        with open(lang_filename, 'rb') as file:
-            (lang, lines) = pkl.load(file)
-    else:
-        lang, lines = prepareData(dataset)
-        with open(lang_filename, 'wb') as file:
-            pkl.dump((lang, lines), file)
+                              str(train_iters), '.pt'])
 
 
+    # w2v_model = Word2Vec.load(''.join(["word2vec_", str(hidden_size), ".model"]))
+    w2v_vectors = get_embeddings(lang, lines, hidden_size)
+    w2v_vectors = torch.from_numpy(w2v_vectors).float()
     lstm = pretrainLSTM(lang.n_words, hidden_size).to(device)
+    print('lstm initialized')
+    print("Total number of trainable parameters without word2vec:", count_parameters(lstm))
+    def copy_embedding(layer, vectors):
+        return nn.Embedding(layer.num_embeddings, 
+                                  layer.embedding_dim).from_pretrained(vectors)
+    lstm.embedding = copy_embedding(lstm.embedding, w2v_vectors)
+    print("Total number of trainable parameters with word2vec:", count_parameters(lstm))
+    
     print('using hidden_size=' + str(hidden_size), ' train_iters = ', train_iters)
     trainIters(lstm, lang, 
                lines, 
                train_iters, 
                print_every=train_iters // 20 + 1, 
                plot_every=train_iters // 50 + 1)
-    with open(model_filename, 'wb') as file:
-        pkl.dump(lstm, file)
     
+    # with open(model_filename, 'wb') as file:
+    #    pkl.dump(lstm, file)
+    torch.save(lstm.state_dict(), model_filename)    

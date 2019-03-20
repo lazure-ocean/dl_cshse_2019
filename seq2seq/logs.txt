@@ -1,3 +1,27 @@
+20.03.2019 02:27
+Cyril_ion@gpu:~/dl_cshse_2019/seq2seq$ python lm_pretrain.py
+using hidden_size=325
+3m 45s (- 71m 6s) (251 5%) train: 7.8756, val: 7.0978
+7m 31s (- 67m 23s) (502 10%) train: 6.7859, val: 5.8537
+11m 17s (- 63m 43s) (753 15%) train: 6.5537, val: 5.5650
+15m 3s (- 59m 55s) (1004 20%) train: 6.4601, val: 5.4235
+18m 49s (- 56m 11s) (1255 25%) train: 6.3433, val: 5.3314
+22m 36s (- 52m 27s) (1506 30%) train: 6.2166, val: 5.5207
+26m 23s (- 48m 42s) (1757 35%) train: 6.2151, val: 5.4366
+30m 9s (- 44m 56s) (2008 40%) train: 6.1885, val: 5.3664
+33m 55s (- 41m 10s) (2259 45%) train: 6.0983, val: 5.1502
+37m 42s (- 37m 24s) (2510 50%) train: 5.9797, val: 4.9990
+41m 28s (- 33m 37s) (2761 55%) train: 5.9879, val: 4.9781
+45m 14s (- 29m 51s) (3012 60%) train: 5.9058, val: 5.1393
+49m 1s (- 26m 5s) (3263 65%) train: 5.9919, val: 5.2506
+52m 48s (- 22m 19s) (3514 70%) train: 5.8784, val: 5.0362
+56m 34s (- 18m 33s) (3765 75%) train: 5.8744, val: 4.9287
+60m 21s (- 14m 47s) (4016 80%) train: 5.9015, val: 4.9932
+64m 7s (- 11m 1s) (4267 85%) train: 5.8586, val: 5.0447
+67m 55s (- 7m 14s) (4518 90%) train: 5.8754, val: 5.0955
+71m 41s (- 3m 28s) (4769 95%) train: 5.7757, val: 5.0038
+
+
 18.03.2019 13:47
 Cyril_ion@gpu:~/dl_cshse_2019/seq2seq$ python lm_pretrain.py
 Reading lines...
